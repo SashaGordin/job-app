@@ -201,6 +201,15 @@
   .preview-panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 24px 30px; }
   .preview-panel .name { font-size: 20px; font-weight: 700; margin: 0 0 2px; }
   .preview-panel .target { font-size: 12px; color: var(--ink-soft); margin-bottom: 16px; }
+  .tab-bar { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .tab-btn {
+    font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    background: none; border: none; border-bottom: 2px solid transparent;
+    padding: 8px 4px; margin-right: 16px; cursor: pointer;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .posting-link { display: inline-block; font-size: 12.5px; color: var(--accent); margin-bottom: 14px; }
+  .posting-section { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -290,6 +299,24 @@ I'm excited to apply for the AI Automation Engineer role. In my current position
 I'd welcome the chance to bring that same focus on automation to Acme Robotics.
 
 Alex Doe`,
+};
+
+const JOB_POSTING = {
+  title: "AI Automation Engineer",
+  company: "Acme Robotics",
+  location: "Remote (US)",
+  source: "Greenhouse",
+  url: "https://boards.greenhouse.io/acmerobotics/jobs/example",
+  description:
+`Acme Robotics builds the automation pipelines that run our fulfillment centers end to end. We're looking for an engineer to own the systems that move data and decisions through that pipeline reliably at scale.
+
+You'll design and operate automation and data pipelines, work closely with the robotics and ops teams to reduce manual intervention, and be a primary on-call owner for the systems you build.`,
+  requirements: [
+    "4+ years building production automation or data pipelines",
+    "Strong Python; comfortable with Kafka or a similar streaming system",
+    "Experience with cloud infrastructure (AWS) and infrastructure-as-code (Terraform)",
+    "Bonus: experience with fraud-detection or anomaly-detection systems",
+  ],
 };
 
 function bulletsInBaseOrder(role) {
@@ -540,6 +567,7 @@ function VariantC() {
   const [decisions, setDecisions] = useState(() =>
     Object.fromEntries(allChanges.map((c) => [c.id, "approved"]))
   );
+  const [rightTab, setRightTab] = useState("preview");
 
   const setDecision = (id, val) => setDecisions((d) => ({ ...d, [id]: val }));
   const approveAll = () => setDecisions(Object.fromEntries(allChanges.map((c) => [c.id, "approved"])));
@@ -620,31 +648,65 @@ function VariantC() {
         </div>
 
         <div className="preview-panel">
-          <div className="name">{PROFILE.name}</div>
-          <div className="target">Live preview — reacts to your approve/reject choices on the left</div>
-          {previewRoles.map((role) => (
-            <div className="role-block" key={role.id}>
-              <div className="role-head">{role.title}</div>
-              <div className="role-sub">{role.company} · {role.dates}</div>
+          <div className="tab-bar">
+            <button
+              className={"tab-btn" + (rightTab === "preview" ? " active" : "")}
+              onClick={() => setRightTab("preview")}
+            >
+              Tailored preview
+            </button>
+            <button
+              className={"tab-btn" + (rightTab === "posting" ? " active" : "")}
+              onClick={() => setRightTab("posting")}
+            >
+              Job posting
+            </button>
+          </div>
+
+          {rightTab === "preview" ? (
+            <>
+              <div className="name">{PROFILE.name}</div>
+              <div className="target">Live preview — reacts to your approve/reject choices on the left</div>
+              {previewRoles.map((role) => (
+                <div className="role-block" key={role.id}>
+                  <div className="role-head">{role.title}</div>
+                  <div className="role-sub">{role.company} · {role.dates}</div>
+                  <ul className="bullets">
+                    {role._bullets.map((b) => <li key={b.id}>{b._show}</li>)}
+                  </ul>
+                </div>
+              ))}
+              <div className="role-block">
+                <div className="role-head">Skills</div>
+                <div className="skills-row">
+                  {previewSkills.map((s) => <span className="chip" key={s}>{s}</span>)}
+                </div>
+              </div>
+              <div className="role-block">
+                <div className="role-head">Cover letter</div>
+                {coverApproved ? (
+                  <div className="cover-box" style={{ marginTop: 0 }}>{PROFILE.coverLetter}</div>
+                ) : (
+                  <div style={{ fontSize: 13, color: "var(--ink-soft)", fontStyle: "italic" }}>Not included</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="posting-view">
+              <div className="name">{JOB_POSTING.title}</div>
+              <div className="target">
+                {JOB_POSTING.company} · {JOB_POSTING.location} · sourced via {JOB_POSTING.source}
+              </div>
+              <a className="posting-link" href={JOB_POSTING.url} target="_blank" rel="noreferrer">
+                View original posting ↗
+              </a>
+              <div className="posting-section">{JOB_POSTING.description}</div>
+              <div className="role-head" style={{ marginTop: 16, marginBottom: 6 }}>Requirements</div>
               <ul className="bullets">
-                {role._bullets.map((b) => <li key={b.id}>{b._show}</li>)}
+                {JOB_POSTING.requirements.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
             </div>
-          ))}
-          <div className="role-block">
-            <div className="role-head">Skills</div>
-            <div className="skills-row">
-              {previewSkills.map((s) => <span className="chip" key={s}>{s}</span>)}
-            </div>
-          </div>
-          <div className="role-block">
-            <div className="role-head">Cover letter</div>
-            {coverApproved ? (
-              <div className="cover-box" style={{ marginTop: 0 }}>{PROFILE.coverLetter}</div>
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--ink-soft)", fontStyle: "italic" }}>Not included</div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
