@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway, do not ship.
+  Answers wayfinder ticket #10 (github.com/SashaGordin/job-app/issues/10):
+  "What does the review/submission UI look like for a drafted application
+  before it's sent?" Three structurally different variants of the same
+  screen, switchable via ?variant=A|B|C and the floating bar at the bottom.
+
+  Run: `python3 -m http.server 8080` from this directory, then open
+  http://localhost:8080/?variant=A
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>PROTOTYPE — Review &amp; submission UI (issue #10)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  :root {
+    --ink: #1c2024;
+    --ink-soft: #5a6169;
+    --paper: #ffffff;
+    --bg: #f4f5f7;
+    --line: #e2e5e9;
+    --kept: #6b7280;
+    --reword-bg: #fff8e1;
+    --reword-border: #d9a441;
+    --drop-bg: #fdecec;
+    --drop-line: #c74d4d;
+    --reorder-bg: #eaf1ff;
+    --reorder-border: #4d7cc7;
+    --accent: #2f6fed;
+    --good: #1f9254;
+    --bad: #c74d4d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    padding-bottom: 90px;
+  }
+  .proto-banner {
+    background: #1c2024;
+    color: #fbca04;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 6px 10px;
+  }
+  .proto-banner a { color: #fbca04; }
+  .topbar {
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 24px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .topbar h1 { font-size: 15px; margin: 0; }
+  .topbar .job { color: var(--ink-soft); font-size: 13px; }
+  .container { max-width: 1180px; margin: 0 auto; padding: 24px; }
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .tag-reword { background: var(--reword-bg); color: #8a6416; border: 1px solid var(--reword-border); }
+  .tag-drop { background: var(--drop-bg); color: var(--bad); border: 1px solid var(--drop-line); }
+  .tag-reorder { background: var(--reorder-bg); color: #2c4f8f; border: 1px solid var(--reorder-border); }
+  .btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    cursor: pointer;
+  }
+  .btn:hover { background: #f0f1f3; }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: #2560d6; }
+  .btn-good { background: #eafaf1; color: var(--good); border-color: #b6e6c9; }
+  .btn-bad { background: var(--drop-bg); color: var(--bad); border-color: #f0c4c4; }
+  .btn-sm { font-size: 12px; padding: 5px 10px; }
+  .role-block { margin-bottom: 20px; }
+  .role-head { font-size: 14px; font-weight: 700; }
+  .role-sub { font-size: 12px; color: var(--ink-soft); margin-bottom: 8px; }
+  ul.bullets { margin: 0; padding-left: 18px; }
+  .bullets li { margin-bottom: 6px; font-size: 13.5px; line-height: 1.5; }
+  .skills-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip {
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #eef0f3;
+    border: 1px solid var(--line);
+  }
+  .chip.moved { background: var(--reorder-bg); border-color: var(--reorder-border); color: #2c4f8f; }
+
+  /* Switcher */
+  .switcher {
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1c2024;
+    color: white;
+    border-radius: 999px;
+    padding: 8px 8px 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    z-index: 999;
+    font-size: 13px;
+  }
+  .switcher button {
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .switcher button:hover { background: rgba(255,255,255,0.25); }
+  .switcher .label { min-width: 220px; text-align: center; }
+  .switcher .label b { color: #fbca04; }
+
+  /* Variant A: side-by-side */
+  .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .diff-pane { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .diff-pane h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin: 0 0 12px; }
+  .diff-pane li.dropped { text-decoration: line-through; color: var(--bad); background: var(--drop-bg); border-radius: 4px; padding: 2px 4px; }
+  .diff-pane li.reworded { background: var(--reword-bg); border-left: 3px solid var(--reword-border); padding: 3px 8px; margin-left: -8px; border-radius: 0 4px 4px 0; }
+  .diff-pane li.reordered { background: var(--reorder-bg); border-left: 3px solid var(--reorder-border); padding: 3px 8px; margin-left: -8px; border-radius: 0 4px 4px 0; }
+  .cover-box { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin-top: 20px; white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; }
+  .action-bar { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* Variant B: inline annotated document */
+  .doc-toolbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 16px; margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .document { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 32px 40px; font-family: Georgia, "Times New Roman", serif; }
+  .document h2.name { font-family: inherit; font-size: 22px; margin: 0 0 2px; }
+  .document .target { font-family: -apple-system, sans-serif; font-size: 12px; color: var(--ink-soft); margin-bottom: 20px; }
+  .doc-role { margin-bottom: 18px; }
+  .doc-role .rh { font-weight: 700; font-size: 14.5px; }
+  .doc-role .rs { font-size: 12.5px; color: var(--ink-soft); font-style: italic; margin-bottom: 6px; }
+  .doc-bullet { position: relative; padding-left: 4px; margin-bottom: 6px; font-size: 14px; line-height: 1.6; }
+  .doc-bullet .marker { cursor: pointer; border-bottom: 1px dashed currentColor; }
+  .doc-bullet .marker.reworded { color: #8a6416; }
+  .doc-bullet .marker.reordered { color: #2c4f8f; }
+  .doc-popover {
+    font-family: -apple-system, sans-serif;
+    margin-top: 4px; margin-left: 12px; font-size: 12.5px;
+    background: #fafbfc; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+    color: var(--ink-soft);
+  }
+  .doc-popover .from { text-decoration: line-through; color: var(--bad); display: block; }
+  .doc-popover .to { color: var(--good); display: block; }
+  .removed-section { font-family: -apple-system, sans-serif; font-size: 12.5px; color: var(--ink-soft); border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 8px; }
+  .removed-section summary { cursor: pointer; font-weight: 600; }
+  .removed-section li { text-decoration: line-through; }
+  .doc-section-title { font-family: -apple-system, sans-serif; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin: 22px 0 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .doc-cover { font-family: -apple-system, sans-serif; font-size: 13.5px; white-space: pre-wrap; line-height: 1.6; }
+
+  /* Variant C: itemized changes + live preview */
+  .split { display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
+  .changes-panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 14px; position: sticky; top: 16px; max-height: calc(100vh - 140px); overflow-y: auto; }
+  .changes-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .changes-head h2 { font-size: 13px; margin: 0; }
+  .change-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .change-card.rejected { opacity: 0.5; }
+  .change-summary { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+  .change-detail { font-size: 12px; color: var(--ink-soft); margin-bottom: 8px; }
+  .change-detail .from { text-decoration: line-through; color: var(--bad); display: block; }
+  .change-detail .to { color: var(--good); display: block; }
+  .change-controls { display: flex; gap: 6px; }
+  .change-controls button { flex: 1; }
+  .preview-panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 24px 30px; }
+  .preview-panel .name { font-size: 20px; font-weight: 700; margin: 0 0 2px; }
+  .preview-panel .target { font-size: 12px; color: var(--ink-soft); margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<div class="proto-banner">🧪 PROTOTYPE — throwaway, answers <a href="https://github.com/SashaGordin/job-app/issues/10" target="_blank">issue #10</a>, not for production</div>
+<div id="root"></div>
+
+<script type="text/babel-source" id="app-source">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+/* ---------- Mock data ---------- */
+/* One base profile, tailored per a sample posting. Values (dates, employer,
+   titles, metric numbers) never change between base and tailored — only
+   selection, order, and framing do, per issue #6's answer. */
+
+const PROFILE = {
+  name: "Alex Doe",
+  targetJob: { title: "AI Automation Engineer", company: "Acme Robotics" },
+  education: "B.S. Computer Science, State University, 2019",
+  roles: [
+    {
+      id: "r1",
+      title: "Senior Software Engineer",
+      company: "Northwind Robotics",
+      dates: "2022 – Present",
+      bullets: [
+        {
+          id: "b1",
+          base: "Led migration of legacy monolith to microservices, reducing deploy time by 40%",
+          status: "reworded",
+          tailored: "Automated migration of legacy monolith to a microservices pipeline, cutting deploy time 40%",
+          order: 0,
+        },
+        {
+          id: "b2",
+          base: "Built internal tooling used by 30+ engineers daily",
+          status: "kept",
+          order: 1,
+        },
+        {
+          id: "b4",
+          base: "Mentored 4 junior engineers through promotion to mid-level",
+          status: "reordered",
+          order: 2,
+          note: "moved down — less relevant to this posting than the tooling work",
+        },
+        {
+          id: "b3",
+          base: "Owned on-call rotation for payments infrastructure",
+          status: "dropped",
+        },
+      ],
+    },
+    {
+      id: "r2",
+      title: "Software Engineer",
+      company: "Fintech Co",
+      dates: "2019 – 2021",
+      bullets: [
+        {
+          id: "b5",
+          base: "Implemented fraud-detection pipeline processing 2M transactions/day",
+          status: "reworded",
+          tailored: "Automated fraud-detection pipeline processing 2M transactions/day",
+          order: 0,
+        },
+        {
+          id: "b7",
+          base: "Wrote integration tests raising coverage from 45% to 85%",
+          status: "kept",
+          order: 1,
+        },
+        {
+          id: "b6",
+          base: "Reduced API latency p95 from 800ms to 220ms",
+          status: "dropped",
+        },
+      ],
+    },
+  ],
+  baseSkills: ["Python", "TypeScript", "React", "PostgreSQL", "AWS", "Kubernetes", "Kafka", "Terraform"],
+  tailoredSkillOrder: ["Python", "Kafka", "AWS", "Terraform", "Kubernetes", "TypeScript", "React", "PostgreSQL"],
+  coverLetter:
+`Dear Acme Robotics team,
+
+I'm excited to apply for the AI Automation Engineer role. In my current position at Northwind Robotics I've automated the kind of high-volume pipeline work this role centers on — most recently a legacy-to-microservices migration that cut deploy time 40%, and before that a fraud-detection pipeline processing 2M transactions/day at Fintech Co.
+
+I'd welcome the chance to bring that same focus on automation to Acme Robotics.
+
+Alex Doe`,
+};
+
+function bulletsInBaseOrder(role) {
+  return role.bullets; // authored order == base order in this mock
+}
+function bulletsInTailoredOrder(role) {
+  return role.bullets
+    .filter((b) => b.status !== "dropped")
+    .slice()
+    .sort((a, b) => a.order - b.order);
+}
+function skillLabel(skill, movedSet) {
+  return skill;
+}
+
+function flattenChanges(profile) {
+  const changes = [];
+  profile.roles.forEach((role) => {
+    role.bullets.forEach((b) => {
+      if (b.status === "dropped") {
+        changes.push({
+          id: b.id,
+          kind: "dropped",
+          roleLabel: `${role.title}, ${role.company}`,
+          summary: `Dropped a bullet under ${role.title}`,
+          detail: b.base,
+        });
+      } else if (b.status === "reworded") {
+        changes.push({
+          id: b.id,
+          kind: "reworded",
+          roleLabel: `${role.title}, ${role.company}`,
+          summary: `Reworded a bullet under ${role.title}`,
+          before: b.base,
+          after: b.tailored,
+        });
+      } else if (b.status === "reordered") {
+        changes.push({
+          id: b.id,
+          kind: "reordered",
+          roleLabel: `${role.title}, ${role.company}`,
+          summary: `Reordered a bullet under ${role.title}`,
+          detail: b.base,
+          note: b.note,
+        });
+      }
+    });
+  });
+  changes.push({
+    id: "skills",
+    kind: "skills-reorder",
+    summary: "Reordered skills to surface automation-relevant ones first",
+    detail: `${profile.baseSkills.join(", ")}  →  ${profile.tailoredSkillOrder.join(", ")}`,
+  });
+  changes.push({
+    id: "cover-letter",
+    kind: "cover-letter",
+    summary: "Generated a cover letter for this posting",
+    detail: profile.coverLetter,
+  });
+  return changes;
+}
+
+/* ---------- Shared bits ---------- */
+
+function ActionBar({ onEdit, onReject, onApprove, onSubmit, approveLabel = "Approve", scope = "application" }) {
+  return (
+    <div className="action-bar">
+      <button className="btn" onClick={onEdit}>✎ Edit</button>
+      <button className="btn btn-bad" onClick={onReject}>✕ Reject {scope}</button>
+      <button className="btn btn-good" onClick={onApprove}>✓ {approveLabel}</button>
+      <button className="btn btn-primary" onClick={onSubmit}>Submit application</button>
+    </div>
+  );
+}
+
+function stub(label) {
+  return () => alert(`PROTOTYPE STUB — "${label}" has no backend yet. This just shows the affordance.`);
+}
+
+/* ---------- Variant A: side-by-side diff ---------- */
+
+function VariantA() {
+  return (
+    <div className="container">
+      <div className="diff-grid">
+        <div className="diff-pane">
+          <h2>Base profile</h2>
+          {PROFILE.roles.map((role) => (
+            <div className="role-block" key={role.id}>
+              <div className="role-head">{role.title}</div>
+              <div className="role-sub">{role.company} · {role.dates}</div>
+              <ul className="bullets">
+                {bulletsInBaseOrder(role).map((b) => (
+                  <li key={b.id} className={b.status === "dropped" ? "dropped" : ""}>
+                    {b.base}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="role-block">
+            <div className="role-head">Skills</div>
+            <div className="skills-row">
+              {PROFILE.baseSkills.map((s) => <span className="chip" key={s}>{s}</span>)}
+            </div>
+          </div>
+        </div>
+
+        <div className="diff-pane">
+          <h2>Tailored for {PROFILE.targetJob.title} @ {PROFILE.targetJob.company}</h2>
+          {PROFILE.roles.map((role) => (
+            <div className="role-block" key={role.id}>
+              <div className="role-head">{role.title}</div>
+              <div className="role-sub">{role.company} · {role.dates}</div>
+              <ul className="bullets">
+                {bulletsInTailoredOrder(role).map((b) => (
+                  <li key={b.id} className={b.status !== "kept" ? b.status : ""}>
+                    {b.status === "reworded" ? b.tailored : b.base}
+                    {b.status === "reworded" && <span className="tag tag-reword">reworded</span>}
+                    {b.status === "reordered" && <span className="tag tag-reorder">reordered</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="role-block">
+            <div className="role-head">Skills</div>
+            <div className="skills-row">
+              {PROFILE.tailoredSkillOrder.map((s, i) => (
+                <span className={"chip" + (PROFILE.baseSkills.indexOf(s) !== i ? " moved" : "")} key={s}>{s}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="cover-box">
+        <strong style={{ fontFamily: "-apple-system, sans-serif", fontSize: 12, textTransform: "uppercase", color: "var(--ink-soft)", display: "block", marginBottom: 8 }}>
+          Cover letter
+        </strong>
+        {PROFILE.coverLetter}
+      </div>
+
+      <ActionBar
+        onEdit={stub("Edit")}
+        onReject={stub("Reject application")}
+        onApprove={stub("Approve application")}
+        onSubmit={stub("Submit application")}
+      />
+    </div>
+  );
+}
+
+/* ---------- Variant B: inline annotated document ---------- */
+
+function DocBullet({ b }) {
+  const [open, setOpen] = useState(false);
+  if (b.status === "kept") {
+    return <div className="doc-bullet">{b.base}</div>;
+  }
+  const isReworded = b.status === "reworded";
+  return (
+    <div className="doc-bullet">
+      <span
+        className={"marker " + b.status}
+        onClick={() => setOpen((o) => !o)}
+        title="Click to see what changed"
+      >
+        {isReworded ? b.tailored : b.base}
+      </span>
+      {isReworded && <span className="tag tag-reword">reworded</span>}
+      {b.status === "reordered" && <span className="tag tag-reorder">reordered</span>}
+      {open && (
+        <div className="doc-popover">
+          {isReworded ? (
+            <>
+              <span className="from">{b.base}</span>
+              <span className="to">{b.tailored}</span>
+            </>
+          ) : (
+            <span>{b.note}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VariantB() {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="container">
+      <div className="doc-toolbar">
+        <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+          Reviewing draft for <strong>{PROFILE.targetJob.title}</strong> @ {PROFILE.targetJob.company}
+          {editing && <span className="tag tag-reword">editing</span>}
+        </div>
+        <ActionBar
+          onEdit={() => setEditing((e) => !e)}
+          onReject={stub("Reject application")}
+          onApprove={stub("Approve application")}
+          onSubmit={stub("Submit application")}
+        />
+      </div>
+
+      <div className="document" contentEditable={editing} suppressContentEditableWarning={editing}>
+        <h2 className="name">{PROFILE.name}</h2>
+        <div className="target">Tailored for {PROFILE.targetJob.title} @ {PROFILE.targetJob.company}</div>
+
+        {PROFILE.roles.map((role) => {
+          const removed = role.bullets.filter((b) => b.status === "dropped");
+          return (
+            <div className="doc-role" key={role.id}>
+              <div className="rh">{role.title}</div>
+              <div className="rs">{role.company} · {role.dates}</div>
+              {bulletsInTailoredOrder(role).map((b) => <DocBullet b={b} key={b.id} />)}
+              {removed.length > 0 && (
+                <details className="removed-section">
+                  <summary>{removed.length} bullet{removed.length > 1 ? "s" : ""} removed for this posting</summary>
+                  <ul>
+                    {removed.map((b) => <li key={b.id}>{b.base}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="doc-section-title">Skills</div>
+        <div className="skills-row">
+          {PROFILE.tailoredSkillOrder.map((s, i) => (
+            <span className={"chip" + (PROFILE.baseSkills.indexOf(s) !== i ? " moved" : "")} key={s}>{s}</span>
+          ))}
+        </div>
+
+        <div className="doc-section-title">Cover letter</div>
+        <div className="doc-cover">{PROFILE.coverLetter}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Variant C: itemized change list + live preview ---------- */
+
+function VariantC() {
+  const allChanges = useMemo(() => flattenChanges(PROFILE), []);
+  const [decisions, setDecisions] = useState(() =>
+    Object.fromEntries(allChanges.map((c) => [c.id, "approved"]))
+  );
+
+  const setDecision = (id, val) => setDecisions((d) => ({ ...d, [id]: val }));
+  const approveAll = () => setDecisions(Object.fromEntries(allChanges.map((c) => [c.id, "approved"])));
+  const resetAll = () => setDecisions(Object.fromEntries(allChanges.map((c) => [c.id, "rejected"])));
+
+  // Derive the previewed resume from current decisions.
+  const previewRoles = PROFILE.roles.map((role) => {
+    const bullets = role.bullets
+      .map((b) => {
+        const approved = decisions[b.id] === "approved";
+        if (b.status === "dropped") {
+          return approved ? null : { ...b, _show: b.base, _order: b.order ?? 99 };
+        }
+        if (b.status === "reworded") {
+          return { ...b, _show: approved ? b.tailored : b.base, _order: approved ? b.order : 99 };
+        }
+        if (b.status === "reordered") {
+          return { ...b, _show: b.base, _order: approved ? b.order : 99 };
+        }
+        return { ...b, _show: b.base, _order: b.order ?? 50 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a._order - b._order);
+    return { ...role, _bullets: bullets };
+  });
+  const skillsApproved = decisions["skills"] === "approved";
+  const previewSkills = skillsApproved ? PROFILE.tailoredSkillOrder : PROFILE.baseSkills;
+  const coverApproved = decisions["cover-letter"] === "approved";
+
+  return (
+    <div className="container">
+      <div className="split">
+        <div className="changes-panel">
+          <div className="changes-head">
+            <h2>{allChanges.length} proposed changes</h2>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <button className="btn btn-sm" onClick={approveAll}>Approve all</button>
+            <button className="btn btn-sm" onClick={resetAll}>Reject all</button>
+          </div>
+          {allChanges.map((c) => {
+            const decision = decisions[c.id];
+            return (
+              <div className={"change-card" + (decision === "rejected" ? " rejected" : "")} key={c.id}>
+                <div className="change-summary">{c.summary}</div>
+                <div className="change-detail">
+                  {c.kind === "reworded" && (
+                    <>
+                      <span className="from">{c.before}</span>
+                      <span className="to">{c.after}</span>
+                    </>
+                  )}
+                  {c.kind === "dropped" && <span>{c.detail}</span>}
+                  {c.kind === "reordered" && <span>{c.detail} — {c.note}</span>}
+                  {(c.kind === "skills-reorder" || c.kind === "cover-letter") && <span>{c.detail}</span>}
+                </div>
+                <div className="change-controls">
+                  <button
+                    className={"btn btn-sm" + (decision === "rejected" ? " btn-bad" : "")}
+                    onClick={() => setDecision(c.id, "rejected")}
+                  >
+                    Reject
+                  </button>
+                  <button className="btn btn-sm" onClick={stub("Edit this change")}>Edit</button>
+                  <button
+                    className={"btn btn-sm" + (decision === "approved" ? " btn-good" : "")}
+                    onClick={() => setDecision(c.id, "approved")}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <button className="btn btn-primary" style={{ width: "100%", marginTop: 6 }} onClick={stub("Submit application")}>
+            Submit application
+          </button>
+        </div>
+
+        <div className="preview-panel">
+          <div className="name">{PROFILE.name}</div>
+          <div className="target">Live preview — reacts to your approve/reject choices on the left</div>
+          {previewRoles.map((role) => (
+            <div className="role-block" key={role.id}>
+              <div className="role-head">{role.title}</div>
+              <div className="role-sub">{role.company} · {role.dates}</div>
+              <ul className="bullets">
+                {role._bullets.map((b) => <li key={b.id}>{b._show}</li>)}
+              </ul>
+            </div>
+          ))}
+          <div className="role-block">
+            <div className="role-head">Skills</div>
+            <div className="skills-row">
+              {previewSkills.map((s) => <span className="chip" key={s}>{s}</span>)}
+            </div>
+          </div>
+          <div className="role-block">
+            <div className="role-head">Cover letter</div>
+            {coverApproved ? (
+              <div className="cover-box" style={{ marginTop: 0 }}>{PROFILE.coverLetter}</div>
+            ) : (
+              <div style={{ fontSize: 13, color: "var(--ink-soft)", fontStyle: "italic" }}>Not included</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Switcher chrome ---------- */
+
+const VARIANTS = [
+  { key: "A", name: "Side-by-side diff", Component: VariantA },
+  { key: "B", name: "Inline annotated document", Component: VariantB },
+  { key: "C", name: "Itemized change list + live preview", Component: VariantC },
+];
+
+function getVariantFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const v = params.get("variant");
+  return VARIANTS.find((x) => x.key === v) ? v : "A";
+}
+
+function Switcher({ current, onChange }) {
+  const idx = VARIANTS.findIndex((v) => v.key === current);
+  const cur = VARIANTS[idx];
+
+  const cycle = useCallback(
+    (dir) => {
+      const next = VARIANTS[(idx + dir + VARIANTS.length) % VARIANTS.length];
+      onChange(next.key);
+    },
+    [idx, onChange]
+  );
+
+  useEffect(() => {
+    const handler = (e) => {
+      const tag = document.activeElement?.tagName;
+      const editable = document.activeElement?.isContentEditable;
+      if (tag === "INPUT" || tag === "TEXTAREA" || editable) return;
+      if (e.key === "ArrowLeft") cycle(-1);
+      if (e.key === "ArrowRight") cycle(1);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [cycle]);
+
+  return (
+    <div className="switcher">
+      <button onClick={() => cycle(-1)} aria-label="Previous variant">←</button>
+      <span className="label"><b>{cur.key}</b> — {cur.name}</span>
+      <button onClick={() => cycle(1)} aria-label="Next variant">→</button>
+    </div>
+  );
+}
+
+function App() {
+  const [variant, setVariant] = useState(getVariantFromURL);
+
+  useEffect(() => {
+    const onPop = () => setVariant(getVariantFromURL());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const changeVariant = (key) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("variant", key);
+    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+    setVariant(key);
+  };
+
+  const Current = VARIANTS.find((v) => v.key === variant).Component;
+
+  return (
+    <>
+      <div className="topbar">
+        <h1>Review &amp; submit</h1>
+        <div className="job">{PROFILE.targetJob.title} @ {PROFILE.targetJob.company}</div>
+      </div>
+      <Current />
+      <Switcher current={variant} onChange={changeVariant} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+<script>
+  // Manual transform, pinned to the classic JSX runtime — @babel/standalone's
+  // auto-scan (type="text/babel") defaults to the automatic runtime, which
+  // emits an ES `import` the browser can't execute inline.
+  var src = document.getElementById("app-source").textContent;
+  var out = Babel.transform(src, { presets: [["react", { runtime: "classic" }]] }).code;
+  var s = document.createElement("script");
+  s.textContent = out;
+  document.body.appendChild(s);
+</script>
+</body>
+</html>
