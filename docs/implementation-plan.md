@@ -87,6 +87,14 @@ The wayfinder map deliberately left these open ("Tech stack/hosting is undecided
 - **Review UI access**: single-user, but does it sit behind any auth, or is it VM-local/VPN-only?
 - **Backup cadence** for the SQLite snapshot.
 
+### Phase 0 decisions (resolved)
+
+Resolved while building [#13](https://github.com/SashaGordin/job-app/issues/13):
+
+- **Language/framework**: **Node.js + TypeScript**, confirmed as recommended above.
+- **Deployment target**: **Fly.io**. The app is Docker/Fly-ready (`Dockerfile`, `fly.toml`) and verified locally via `docker build`/`docker run`; the actual `flyctl auth login` + `flyctl deploy` is a manual, one-time step documented in `docs/deploy.md` since it requires an interactive browser OAuth login.
+- **Scheduling mechanism**: **in-process scheduler** (`node-cron`), not OS-level cron — a single `runScan()` function is invoked both by the cron schedule and by the `POST /scan-now` HTTP route, so there's exactly one code path for "scheduled" and "on-demand," matching the ticket's requirement. This runs inside a long-lived Node process (`fly.toml` sets `auto_stop_machines = false` / `min_machines_running = 1` so Fly's scale-to-zero doesn't kill the timer).
+
 ## References
 
 - Map: [Personal job-application automation](https://github.com/SashaGordin/job-app/issues/1)
