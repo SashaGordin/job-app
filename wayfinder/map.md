@@ -19,7 +19,9 @@ Resolve the decisions needed to build a first working MVP of an assisted job-app
 
 ## Decisions so far
 
-(none yet — this map was just charted)
+- [LinkedIn automation feasibility & ToS risk](tickets/001-linkedin-automation-feasibility.md) — not viable to automate (no consumer API exists, unofficial automation is a real 2026 ToS/detection risk); treat as a manual paste-in channel only.
+- [Company ATS mechanics (Greenhouse, Lever, Workday, etc.)](tickets/002-ats-mechanics.md) — Greenhouse and Lever are the top MVP targets (open no-auth listing APIs, stable apply forms), then Ashby; submission APIs are employer-gated everywhere so actual submission always means automating the public apply form.
+- [Job-board API landscape (Indeed and alternatives)](tickets/003-job-board-api-landscape.md) — Indeed is a dead end for individuals; Adzuna is the primary MVP source, layered with free keyless RemoteOK/Remotive/Arbeitnow.
 
 ## Not yet specified
 
